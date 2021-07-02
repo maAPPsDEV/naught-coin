@@ -13,5 +13,8 @@ contract Hacker {
     hacker = payable(msg.sender);
   }
 
-  function attack(address _target) public onlyHacker {}
+  function attack(address _target) public onlyHacker {
+    // In order to win this game, no need to use Solidity.
+    // See test to know how to do this in front-end.
+  }
 }

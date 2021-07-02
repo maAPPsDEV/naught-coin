@@ -32,12 +32,13 @@ Contextually, ERC20 was cool in 2015 because it was like an API that all develop
 
 - **Batchoverflow**: because ERC20 did not enforce SafeMath, it was possible to underflow integers. As we learned in [token-attack](https://github.com/maAPPsDEV/token-attack), this meant that depleting your tokens under 0 would give you `2^256 - 1` tokens!
 - **Transfer “bug”**: makers of ERC20 intended for developers to use `approve()` & `transferfrom()` function combination to move tokens around. But this was never clearly stated in documentation, nor did they warn against using `transfer()` (which was also available). Many developers used `transfer()` instead, which locked many tokens forever.
-> As we learned in [king-attack](https://github.com/maAPPsDEV/king-attack), you can’t guarantee 3rd contracts will receive your transfer. If you transfer tokens into non-receiving parties, you will lose tokens forever, since the token contract already decremented your own account’s balance.
+  > As we learned in [king-attack](https://github.com/maAPPsDEV/king-attack), you can’t guarantee 3rd contracts will receive your transfer. If you transfer tokens into non-receiving parties, you will lose tokens forever, since the token contract already decremented your own account’s balance.
 - **Poor ERC20 inheritance**: some token contracts did not properly implement the ERC interface, which led to many issues. For example, Golem’s GNT didn’t even implement the crucial `approve()` function, leaving `transfer()` as the only, problematic option.
 
-> ***hint*** likewise, this level didn’t implement some key functions — leaving Naughtcoin vulnerable to attack.
+> **_hint_** likewise, this level didn’t implement some key functions — leaving Naughtcoin vulnerable to attack.
 
 ## Security Considerations
+
 - **When interfacing with contracts or implementing an ERC interface, implement all available functions.**
 - If you plan to create your own tokens, consider newer protocols like: ERC223, ERC721 (used by Cryptokitties), ERC827 (ERC 20 killer).
 - If you can, check for [EIP 165 compliance](https://github.com/ethereum/EIPs/pull/881), which confirms which interface an external contract is implementing. Conversely, if you are the one issuing tokens, remember to be EIP-165 compliant.
@@ -49,25 +50,39 @@ Contextually, ERC20 was cool in 2015 because it was like an API that all develop
 
 ```solidity
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.6.0;
+pragma solidity ^0.8.0;
 
-contract Token {
-  mapping(address => uint256) balances;
-  uint256 public totalSupply;
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-  constructor(uint256 _initialSupply) public {
-    balances[msg.sender] = totalSupply = _initialSupply;
+contract NaughtCoin is ERC20 {
+  // string public constant name = 'NaughtCoin';
+  // string public constant symbol = '0x0';
+  // uint public constant decimals = 18;
+  uint256 public timeLock = block.timestamp + 10 * 365 days;
+  uint256 public INITIAL_SUPPLY;
+  address public player;
+
+  constructor(address _player) ERC20("NaughtCoin", "0x0") {
+    player = _player;
+    INITIAL_SUPPLY = 1000000 * (10**uint256(decimals()));
+    // _totalSupply = INITIAL_SUPPLY;
+    // _balances[player] = INITIAL_SUPPLY;
+    _mint(player, INITIAL_SUPPLY);
+    emit Transfer(address(0), player, INITIAL_SUPPLY);
   }
 
-  function transfer(address _to, uint256 _value) public returns (bool) {
-    require(balances[msg.sender] - _value >= 0);
-    balances[msg.sender] -= _value;
-    balances[_to] += _value;
-    return true;
+  function transfer(address _to, uint256 _value) public override lockTokens returns (bool) {
+    super.transfer(_to, _value);
   }
 
-  function balanceOf(address _owner) public view returns (uint256 balance) {
-    return balances[_owner];
+  // Prevent the initial owner from transferring tokens until the timelock has passed
+  modifier lockTokens() {
+    if (msg.sender == player) {
+      require(block.timestamp > timeLock);
+      _;
+    } else {
+      _;
+    }
   }
 }
 
@@ -98,7 +113,7 @@ truffle develop
 test
 ```
 
-You should take ownership of the target contract successfully.
+You should reset your balance as 0.
 
 ```
 truffle(develop)> test
@@ -112,9 +127,9 @@ Compiling your contracts...
 
 
   Contract: Hacker
-    √ should steal countless of tokens (377ms)
+    √ should transfer (655ms)
 
 
-  1 passing (440ms)
+  1 passing (783ms)
 
 ```
